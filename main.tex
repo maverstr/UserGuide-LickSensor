@@ -96,6 +96,7 @@ Jamie \textsc{Johnston}\\[0.3cm] % Supervisor's Name
 \section{Introduction}
 This user guide intends to provide the user with the information required to use and understand the lick-sensor device developed at JohnstonLab as well as giving some clues regarding troubleshooting.
 
+The latest update are available on my Github: \url{https://github.com/maverstr/Lick-Sensor}
 
 \section{Objective}
 The lick-sensor device is intended to be use for mice behavioral studies in a kind of reward system with sugared water. The device allows a mouse to lick a needle which shall deliver some water through a valve. The amount delivered can be setup logically with an Arduino code as well as the conditions required for delivery (e.g. the minimum delay between two deliveries, in case of specific odors delivered, ...). 
@@ -107,11 +108,12 @@ The water should be stored higher than the delivery as to provide pressure for t
 The chosen valve is a solenoid valve VDW22LA for its size, price and speed of actuation. It is working with 24V DC and as it is a solenoid valve, will create peak voltage and current when switching it off/on.
 \subsection{Enclosure}
 The device comes with its enclosure which implements a switch, a push-button as well as a BNC input for valve activation, 4 BNC connectors (24V valve, GND valve, sensor+, sensor -), a 9V output for the fan and 2 BNC outputs for the licking signal and the valve activation signal.
-\subsection{Fan}
-Because of the use of linear voltage regulators (at least in early designs), a fan had to be added to the enclosure. It is a simple fan MC002111 working on max 12V DC.
 
 \subsection{Microcontroller}
 The µC used is an Arduino Uno. The PCB is designed to be stacked on top of it so that each PCB pin is correctly connected to the Arduino. 
+
+\subsection{Fan}
+Because of the use of linear voltage regulators (at least in early designs), a fan had to be added to the enclosure. It is a simple fan MC002111 working on max 12V DC.
 
 \section{Software}
 The Arduino has been programmed using Arduino IDE. 
@@ -133,6 +135,7 @@ The valve is activated when both sensors are touched at the same time or when th
 The valve should open briefly when the two sensors are touched or when the push-button is pressed.
 \section{Electronic Circuits}
 \subsection{Sensor circuit}
+\subsubsection{Original circuit}
 The basic sensor circuit is based of a paper (Slotnick, A simple 2-transistor touch or lick detector circuit, 2009) and allows to send a TTL output whenever an animal touches two wires at the same time.
 
 \begin{figure}[h!]
@@ -151,28 +154,165 @@ According to the paper, a 9V alkaline battery is sufficient for a couple of mont
 
 The battery could also be replaced by a Zener in 6.3V from a 12 or 24V DC power supply which allows unlimited lifetime and controlled voltage. This should only be done in case of sustained contact. Otherwise, probably a million operations before the battery is drained out.
 
-\subsection{Actual implementation}
-The sensor circuit is only a small part of the whole circuit. Moreover, I decided to add a pull-down at the output of the TTL relay and add some decoupling capacitors on the circuit.
+\subsubsection{Actual implementation: First design}
+The sensor circuit is only a small part of the whole circuit shown below. Moreover, I decided to add a pull-down at the output of the TTL relay and add some decoupling capacitors on the circuit.
 The BJTs used are PN2222A and the relays are COTO 9007-05-01 SPST.
 
-\begin{figure}[h!]
+\begin{figure}[h!b!t!]
     \centering
     \includegraphics[width = 10cm]{images/schematic.PNG}
     \caption{PCB View}
     \label{fig:schematic}
 \end{figure}
 
-\begin{figure}[h!]
+\begin{figure}[h!b!t!]
     \centering
     \includegraphics[width=7cm]{images/enclosure.jpg}
     \caption{View of the PCB on top of the Arduino}
     \label{fig:my_label}
 \end{figure}
 
-\subsection{Adding a second valve for droplet removal}
-For behavioral studies it might be interesting to be able to remove the droplet if it is not licked. To do so, we need to open the circuit to open air to be able to drain the pipe. This therefore requires a second valve.
-It is implemented in third version of the design (Section \ref{designV3}).
+\subsubsection{Actual implementation: Second design}
+After testing, I decided the relay wasn't reliable enough and expensive.
+I designed a new circuit that can switch faster, is cheaper and more reliable.
 
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width = 10 cm]{images/sensorv3.png}
+    \caption{Improved sensor circuit}
+    \label{fig:sensorv3}
+\end{figure}
+
+It has been implemented in the V3 and the circuit can be seen on Figure \ref{fig:sensorv3}.
+
+\subsection{DC/DC Converter}
+The valves require 24V DC and the Arduino is powered by 9V on Vin pin. It can then be used to get 5V and 3.3V.
+
+To avoid getting a supply for 24V and 9V, a single DC Supply 24V is used and a TSR 1-2490 DC/DC switching regulator is used to provide 9V.
+Circuit is shown on Figure \ref{fig:dcdc}.
+
+\begin{figure}[h!]
+    \centering
+        \includegraphics[width = 8cm]{images/dcdcconverter.PNG}
+    \caption{DC/DC Converter circuit}
+    \label{fig:dcdc}
+\end{figure}
+
+Early design implemented linear voltage regulators but they tended to overheat and required the use of a fan.
+
+
+\subsection{Logical part, µC}
+The logical part is handled by an Arduino Uno.
+
+The pinout is shown in Figure \ref{fig:logical}.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width = 6cm]{images/logical.PNG}
+    \caption{Arduino pinout}
+    \label{fig:logical}
+\end{figure}
+
+\subsection{Valve Actuator circuit}
+\label{actuator}
+The valve actuator circuit is composed of a digital input 3.3V which is the Arduino command for opening the valve. R5 and R4 protect the FET gate and provide a way for the gate capacitance to discharge rapidly.
+
+When 3.3V signal is given, the FET opens and connects the solenoid valve ground pin to actual ground. Current can then flow through the solenoid and activate the valve. This is basically sinking-current activation.
+
+A fly-back diode is extremely important to protect the circuit against peak voltage when switching the valve off.
+
+This part is shown on Figure \ref{fig:actuator}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width = 10cm]{images/actuator.PNG}
+    \caption{Valve actuator circuit}
+    \label{fig:actuator}
+\end{figure}
+
+\subsection{Adding a second valve for droplet removal}
+It has been discussed later that to be more flexible in behavioral experiments, it would be interesting to add a new valve to drain the droplet that may stay on the needle if the mouse doesn't lick it before a certain time.
+Indeed, if the droplet is triggered by an odor and we want to train the mouse to associate this odor with food (or reward, i.e. sugary water) the droplet can't stay (if it isn't licked) and another odor is sent or the mouse will not correctly associate the odors with the correct reward.
+
+To drain the droplet, we must simply open the circuit to air to stop the capillarity effect. The water pipe is therefore connected to a second pipe with the other valve.
+This valve is the same as the first one (VDW22LA) as water will flow through to be drained and it reduces the number of different components.
+
+This requires to design a second valve circuit actuator. (the same as shown in section \ref{actuator}.
+It was the opportunity to implement some of the improvements discussed.
+
+This new design is shown in section \ref{designV3}.
+
+\subsection{Full design V1}
+The full circuit has shown some good results but the relays (especially the one driving the valve) is not reliable enough and needs to be replaced every thousand actuations. 
+Moreover, this V1 design used linear voltage regulators which tended to overheat.
+This design also didn't implemented a direct way to avoid peak voltage on the load. (a snubber RC circuit has been added later on when testing the PCB).
+
+This circuit is shown in appendix \ref{fig:schematic}.
+
+\subsection{Full design V2}
+A second version of the circuit has been designed but not printed. It implemented solutions to some of the problems presented here above.
+
+The 24V relay is replaced by a FET and a flyback diode is added on the load.
+The schematic is shown in section \ref{schematicV2}.
+
+\begin{figure}[h!t!b!]
+    \centering
+    \includegraphics[width = 8cm]{images/schematicV2.PNG}
+    \caption{PCB V2}
+    \label{fig:PCBV2}
+\end{figure}
+
+\subsection{Full design V3}
+\label{designV3}
+To add the new valve and bring some of the improvements discussed here-above, a third version of the PCB has been designed and printed.
+
+The new circuit implements, among other things:
+\begin{itemize}
+    \item A pull-up BJT driven output signal for the motion sensor. This increases the reliability of this part of the circuit as well as its lifetime expectancy and reduce the cost because the Reed relay is replaced by a BJT.
+    \item A MOSFET driven actuation of the valve (IRL540) which greatly increases the reliability (the reed relay was especially sensitive at 24V with peak voltage due to the solenoid valve). This does not reduce the cost as logic-level FET is expensive.
+    \item Additional fly-back diode instead of RC circuit for the valve recovery. Should be more effective.
+    \item Capacitors C7 and C8 are optional. Indeed, the TSR 1-2490 DC/DC converter comes with integrated filtering capacitors. However, if it is replaced by another one that does not comes with capacitors, the pad is present on the PCB. Moreover, they can still be added if additional filtering is required.
+\end{itemize}
+
+\begin{figure}[h!t!b!]
+    \centering
+    \includegraphics[width = 8cm]{images/BoardViewV3.PNG}
+    \caption{PCB V3}
+    \label{fig:PCBV3}
+\end{figure}
+
+The Eagle files are available on request and the schematic is shown in appendix \ref{schematicV3}.
+The PCB is shown on Figure \ref{fig:PCBV3}.
+
+\section{Improvements}
+\subsection{Zener Diode}
+A Zener diode can be used to control the voltage and make sure that no change in sensitivity appears as voltage decreases in case of a battery-powered application. It could also be used as a voltage regulator for the DC Supply.
+
+Another Zener diode coud also be added at the MOSFET gate to protect it from high voltage. In normal operations though, the gate is connected to the Arduino pin which will not output more than 3.3V and 150mA max. Still, ESD could happen so it would be good practice to add it.
+
+\subsection{Reduce the current flowing through the mouse}
+R1 and R2 could be increased (20M ohms) to reduce current flowing through the subject but reduces reliability.
+
+\subsection{FET instead of BJT ?}
+Transistors used in the sensor design are BJT wich are okay in a low current application but FET could probably do, even if the voltage-controlled is less convenient than BJT's current-controlled.
+The MOSFETs present high input impedance, less fabrication dispersion, very small, easy to scale.
+BJTs present input capacitance (bad for HF), higher output resistance (not suited for low-impedance load), lower gain/stage so SNR quickly degrades, current-operated -> higher consumption
+
+In the end, we could use MOSFET to reduce the consumption but this is not necessary.
+Additionaly, FETs are harder to use at logic gate signal (need to use FETs like IRL540 which are more expensive).
+
+\subsection{Avoid shorts with stackable design}
+One of the issues I ran into, was that my power pins were spatially close (on top) of the Arduino USB Frame (connected to ground). This may have cause a short-circuit between 24V or 9V and Ground. One solution would be to spatially move those pins in another place.
+The other solution which I did was to add one more layer of stackable header to further separate the PCB and the µC. This also allows more air to cool both the PCB and the Arduino down.
+
+\subsection{MTA connectors}
+Once the design is tested and validated, we can also implement some MTA connectors instead of the pin headers. This will however increase the cost of the design but it might be interesting if the device is shared to other people.
+
+\subsection{Photobeam detection}
+By implementing a photobeam, the animal can signal it is ready for stimulation by approaching the sensor without even licking it. This data can then be used to logically control the water tank valve.
+
+\subsection{Shielded lines}
+The solenoid valve may create some noise for other devices in the lab as well as pick up some noise. Shielded lines can be included if needed.
 
 \section{Troubleshooting}
 Note: several ground pins are available on the PCB for easy measurements.
@@ -197,70 +337,8 @@ If so, plug the USB into the Arduino and open the Serial monitor. When a button 
 One of the sensor is connected to 9V and therefore should not be touching any ground. 
 The other sensor is connected to ground through a series of resistors.
 
-\section{Improvements}
-\subsection{Zener Diode}
-A Zener diode can be used to control the voltage and make sure that no change in sensitivity appears as voltage decreases in case of a battery-powered application. It could also be used as a voltage regulator for the DC Supply.
 
-\subsection{Replacement of the Relay}
-The relays have a limited lifetime expectancy, especially in 24V solenoid applications. They can easily be replaced if a socket is present on the PCB. An optocoupler can also be used but are way bigger. 
-
-A new design is proposed in section \ref{newPCB} where the relay is replaced by a FET.
-
-\subsection{Snubber circuit and flyback diode on the valve}
-A snubber circuit can be added on the PCB (instead of soldered above) to reduce peak voltage/current and a flyback diode could be added as well.
-
-\subsection{Reduce the current flowing through the mouse}
-R1 and R2 could be increased (20M ohms) to reduce current flowing through the subject but reduces reliability.
-
-\subsection{FET instead of BJT ?}
-Transistors used in the actual designs are BJT wich are okay in a low current application but FET could probably do, even if the voltage-controlled is less convenient than BJT's current-controlled.
-The MOSFETs present high input impedance, less fabrication dispersion, very small, easy to scale.
-BJTs present input capacitance (bad for HF), higher output resistance (not suited for low-impedance load), lower gain/stage so SNR quickly degrades, current-operated -> higher consumption
-
-In the end, we could use MOSFET to reduce the consumption but this is not necessary.
-Additionaly, FETs are harder to use at logic gate signal (need to use FETs like IRL540 which are more expensive).
-
-\subsection{Avoid shorts with stackable design}
-One of the issues I ran into, was that my power pins were spatially close (on top) of the Arduino USB Frame (connected to ground). This may have cause a short-circuit between 24V or 9V and Ground. One solution would be to spatially move those pins in another place.
-The other solution which I did was to add one more layer of stackable header to further separate the PCB and the µC. This also allows more air to cool both the PCB and the Arduino down.
-
-\subsection{MTA connectors}
-Once the design is tested and validated, we can also implement some MTA connectors instead of the pin headers. This will however increase the cost of the design but it might be interesting if the device is shared to other people.
-
-\subsection{Photobeam detection}
-By implementing a photobeam, the animal can signal it is ready for stimulation by approaching the sensor without even licking it. This data can then be used to logically control the water tank valve.
-
-\subsection{Shielded lines}
-The solenoid valve may create some noise for othe devices in the lab as well as pick up some noise. Shielded lines can be included if needed.
-
-\subsection{New PCB Design}
-\label{newPCB}
-A new PCB design is proposed here which replaced the 24V relay by a FET as well as includes some improvements discussed here-above (flyback diode).
-The eagle files are available on request and the schematic is shown in section \ref{schematicV2}
-
-\begin{figure}[h!t!b!]
-    \centering
-    \includegraphics[width = 8cm]{images/schematicV2.PNG}
-    \caption{PCB V2}
-    \label{fig:PCBV2}
-\end{figure}
-
-\subsection{PCB Design V3}
-\label{designV3}
-To add the new valve and bring some of the improvements discussed here-above, a third version of the PCB has been designed and printed.
-
-This new version does not use reed relays which should increase reliability.
-
-
-
-\begin{figure}[h!t!b!]
-    \centering
-    \includegraphics[width = 8cm]{images/BoardViewV3.PNG}
-    \caption{PCB V3}
-    \label{fig:PCBV3}
-\end{figure}
-
-
+\newpage
 \appendix
 \section{Power dissipation by linear voltage regulators}
 The first design used linear voltage regulators to transform the 24V to 9V able to power the Arduino.
@@ -306,7 +384,7 @@ A simpler and more reliable solution (as the device is used with other devices a
 \includepdf[pagecommand= \section{PCB Schematic \label{schematic}}, scale = 1, angle = 270]{images/schematic}
 
 
-\includepdf[pagecommand= \section{PCB Schematic v2\label{schematicV2}},scale = 1,angle = 270, ]{images/schematicV2}
+\includepdf[pagecommand= \section{PCB Schematic v2\label{schematicV2}},scale = 1.2,angle = 270, ]{images/schematicV2}
 
 
 
